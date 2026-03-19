@@ -16,7 +16,7 @@
     p { margin: 0 0 14px 0; color:#444; line-height:1.45; }
     label { display:block; font-size: 12px; letter-spacing: .05em; color:#666; margin: 12px 0 6px; text-transform: uppercase; }
     input { width:88%; padding: 12px 12px; border:1px solid #ddd; border-radius: 10px; font-size: 16px; }
-    button { width:95%; margin-top: 14px; padding: 14px 14px; border:0; border-radius: 10px; font-size: 16px; cursor:pointer; }
+    button { width:95%; margin-top: 14px; padding: 14px 14px; border:0; border-radius: 10px; font-size: 16px; cursor:pointer; background: #111; color: #fff; }
     button:disabled { opacity: 0.6; cursor:not-allowed; }
     .fine { font-size: 12px; color:#777; margin-top: 12px; }
     .error { margin-top: 10px; color: #b00020; font-size: 14px; }
@@ -60,6 +60,9 @@
     const btn = document.getElementById("btn");
     const msg = document.getElementById("msg");
 
+    // CONFIGURATION: Set your custom destination here
+    const WELCOME_PAGE = "https://sphererocketva.com/wifi";
+
     function setMsg(text, cls) {
       msg.className = cls || "";
       msg.textContent = text || "";
@@ -68,23 +71,25 @@
     document.getElementById("wifiForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       btn.disabled = true;
-      setMsg("Connecting...", "fine");
+      setMsg("Connecting to Wi-Fi...", "fine");
 
       const myForm = e.target;
       const formData = new FormData(myForm);
 
       try {
-        // Validation for Meraki parameters
-        if (!base_grant_url) throw new Error("Please connect via the Wi-Fi portal.");
+        // Validation: Meraki needs the base_grant_url to work
+        if (!base_grant_url) {
+            throw new Error("Portal parameters missing. Please try reconnecting to the Wi-Fi.");
+        }
 
-        // 1. Send to Netlify Forms (Parallel Request)
+        // 1. POST to Netlify Forms (Background sync)
         fetch("/", {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: new URLSearchParams(formData).toString(),
-        }).catch(() => console.log("Netlify dashboard sync skipped."));
+        }).catch(() => console.log("Netlify Form sync failed (non-critical)"));
 
-        // 2. Send to Meraki Grant Function
+        // 2. POST to Grant Function (Triggers Meraki Auth)
         const res = await fetch("/.netlify/functions/grant", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -97,14 +102,18 @@
         });
 
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || "Connection failed.");
+        if (!res.ok) throw new Error(data.error || "Grant failed.");
 
         setMsg("Success! Redirecting...", "ok");
         
-        // Final hand-off to Meraki
-        setTimeout(() => {
-          window.location.href = data.redirect || base_grant_url;
-        }, 800);
+        // 3. THE "SILENT GRANT" & REDIRECT
+        // We ping the grant URL in the background to 'unlock' the Wi-Fi
+        // Then we move the user to the custom page.
+        fetch(data.redirect || base_grant_url, { mode: 'no-cors' }).finally(() => {
+          setTimeout(() => {
+            window.location.href = WELCOME_PAGE;
+          }, 1000); // 1 second delay so they see the success message
+        });
 
       } catch (err) {
         setMsg(err.message, "error");
