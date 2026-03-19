@@ -31,12 +31,14 @@
       <div class="row">
         <div class="left">
           <img class="srlogo" src="./logo.webp" alt="Sphere Rocket">
-          <h2>Connect to Sphere Rocket Wi-Fi</h1>
+          <h2>Connect to Sphere Rocket Wi-Fi</h2>
           <p>Enter your name + email to get instant internet access.</p>
           <p class="fine">This helps us share event resources and updates after today.</p>
         </div>
         <div class="right">
-          <form id="wifiForm" netlify>
+          <form id="wifiForm" name="wifi-leads" netlify>
+            <input type="hidden" name="form-name" value="wifi-leads" />
+
             <label for="name">Your name</label>
             <input id="name" name="name" autocomplete="name" required />
 
@@ -55,48 +57,57 @@
     const qs = new URLSearchParams(location.search);
     const base_grant_url = qs.get("base_grant_url");
     const user_continue_url = qs.get("user_continue_url");
-
-    const msg = document.getElementById("msg");
     const btn = document.getElementById("btn");
+    const msg = document.getElementById("msg");
 
     function setMsg(text, cls) {
       msg.className = cls || "";
       msg.textContent = text || "";
     }
 
-    if (!base_grant_url || !user_continue_url) {
-      setMsg("Preview mode: open this page from the Wi-Fi captive portal to test the real flow.", "fine");
-    }
-
     document.getElementById("wifiForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-      setMsg("", "");
       btn.disabled = true;
+      setMsg("Connecting...", "fine");
+
+      const myForm = e.target;
+      const formData = new FormData(myForm);
 
       try {
-        if (!base_grant_url || !user_continue_url) {
-          throw new Error("Missing Meraki parameters. This page must be opened from the captive portal.");
-        }
+        // Validation for Meraki parameters
+        if (!base_grant_url) throw new Error("Please connect via the Wi-Fi portal.");
 
-        const name = document.getElementById("name").value.trim();
-        const email = document.getElementById("email").value.trim();
+        // 1. Send to Netlify Forms (Parallel Request)
+        fetch("/", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams(formData).toString(),
+        }).catch(() => console.log("Netlify dashboard sync skipped."));
 
-        setMsg("Connecting…", "fine");
-
+        // 2. Send to Meraki Grant Function
         const res = await fetch("/.netlify/functions/grant", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, email, base_grant_url, user_continue_url })
+          body: JSON.stringify({
+            name: formData.get("name"),
+            email: formData.get("email"),
+            base_grant_url,
+            user_continue_url
+          })
         });
 
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || "Could not unlock Wi-Fi. Try again.");
+        if (!res.ok) throw new Error(data.error || "Connection failed.");
 
-        setMsg("Connected. Redirecting…", "ok");
-        window.location.href = data.redirect || user_continue_url;
+        setMsg("Success! Redirecting...", "ok");
+        
+        // Final hand-off to Meraki
+        setTimeout(() => {
+          window.location.href = data.redirect || base_grant_url;
+        }, 800);
 
       } catch (err) {
-        setMsg(err.message || "Something went wrong.", "error");
+        setMsg(err.message, "error");
         btn.disabled = false;
       }
     });
