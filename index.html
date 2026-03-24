@@ -45,8 +45,8 @@
             <label for="email">Your Email</label>
             <input id="email" name="email" type="email" autocomplete="email" required />
 
-            <label for="phone">Your Phone No.</label>
-            <input id="phone" name="phone" type="phone" autocomplete="phone" required />
+            <label for="tel">Your Phone No.</label>
+            <input type="tel" id="phone" name="phone" autocomplete="tel" required />
 
             <button id="btn" type="submit">Continue</button>
             <div id="msg" class=""></div>
@@ -94,7 +94,7 @@
           body: JSON.stringify({
             name: formData.get("name"),
             email: formData.get("email"),
-            phone: formData.get("phone"),
+            phone: formData.get("tel"),
             base_grant_url,
             user_continue_url
           })
