@@ -99,7 +99,7 @@
           body: JSON.stringify({
             name: formData.get("name"),
             email: formData.get("email"),
-            phone: formData.get("phone"), // Included phone from original index.html
+            phone: formData.get("phone"),
             base_grant_url,
             user_continue_url
           })
@@ -111,12 +111,18 @@
         setMsg("Success! Redirecting...", "ok");
         
         // 3. THE "SILENT GRANT" & REDIRECT
-        // We ping the grant URL in the background to 'unlock' the Wi-Fi
-        // Then we move the user to the custom WELCOME_PAGE.
-        fetch(data.redirect || base_grant_url, { mode: 'no-cors' }).finally(() => {
+        // We ping the grant URL in the background to 'unlock' the Wi-Fi.
+        // keepalive: true ensures the request finishes even if the page unloads.
+        const grantTarget = data.redirect || base_grant_url;
+        
+        fetch(grantTarget, { 
+          mode: 'no-cors',
+          keepalive: true
+        }).finally(() => {
+          // Give the router 1.5 seconds to register the "Grant" before moving away
           setTimeout(() => {
             window.location.href = WELCOME_PAGE;
-          }, 1000); // 1 second delay so they see the success message
+          }, 1500);
         });
 
       } catch (err) {
